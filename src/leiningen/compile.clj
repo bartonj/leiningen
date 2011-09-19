@@ -18,9 +18,9 @@
 
 (declare compile)
 
-(def *silently* false)
+(def ^dynamic *silently* false)
 
-(def *skip-auto-compile* false)
+(def ^dynamic *skip-auto-compile* false)
 
 (defn- regex?
   "Returns true if we have regex class"
