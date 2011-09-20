@@ -7,7 +7,7 @@
             [clojure.java.io :as io]
             [leiningen.util.paths :as paths]))
 
-(def *trampoline?* false)
+(def ^{:dynamic true} *trampoline?* false)
 
 (defn get-jvm-opts [project]
   (let [legacy-native (paths/legacy-native-path project)]

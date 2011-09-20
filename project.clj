@@ -6,7 +6,7 @@
   :description "Automate Clojure projects without setting your hair on fire."
   :url "https://github.com/technomancy/leiningen"
   :license {:name "Eclipse Public License"}
-  :dependencies [[org.clojure/clojure "1.2.1"]
+  :dependencies [[org.clojure/clojure "1.3.0-RC0"]
                  [org.clojure/clojure-contrib "1.2.0"]
                  [clucy "0.2.2"]
                  [lancet "1.0.1"]
