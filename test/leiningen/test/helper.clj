@@ -2,9 +2,25 @@
   (:require [lancet.core :as lancet])
   (:use [clojure.java.io :only [file]]
         [leiningen.compile :only [platform-nullsink]]
-        [leiningen.core :only [read-project]]))
+        [leiningen.core :only [read-project]])
+  (:require [clojure.xml :as xml]
+			[clojure.zip :as zip]
+			[clojure.contrib.zip-filter.xml :as zfx])
+  (:import java.io.File)
+  )
 
-(def local-repo (file (System/getProperty "user.home") ".m2" "repository"))
+(def local-repo
+	 (let [home-maven (file (System/getProperty "user.home") ".m2")
+		   home-settings (if (.exists home-maven) (file home-maven "settings.xml"))
+		   settings-repo (if (and home-settings (.exists home-settings))
+				            (-> home-settings .getPath xml/parse zip/xml-zip (zfx/xml1-> :localRepository zfx/text)))
+		   ]
+	   (if settings-repo
+		  (file settings-repo)
+		  (file home-maven "repository")
+		 )
+	   )
+	 )
 
 (defn m2-dir [n v]
   (file local-repo (if (string? n) n (or (namespace n) (name n))) (name n) v))

@@ -2,7 +2,8 @@
   "Package up all the project's files into a jar file."
   (:require [leiningen.compile :as compile]
             [clojure.string :as string]
-            [lancet.core :as lancet])
+            [lancet.core :as lancet]
+            [leiningen.util.maven :as maven])
   (:use [leiningen.pom :only [make-pom make-pom-properties]]
         [leiningen.deps :only [deps]]
         [clojure.java.io :only [copy file]])
@@ -33,8 +34,8 @@
      (local-repo-path {:group group :name name :version version}))
   ([{:keys [group name version]}]
      (unix-path (format
-                 "$HOME/.m2/repository/%s/%s/%s/%s-%s.jar"
-                 (.replace group "." "/") name version name version))))
+                 "%s/%s/%s/%s/%s-%s.jar"
+                 maven/local-repo-path (.replace group "." "/") name version name version))))
 
 (defn- script-classpath-for [project deps-fileset system]
   (let [deps (when deps-fileset
