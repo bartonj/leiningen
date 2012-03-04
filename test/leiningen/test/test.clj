@@ -2,9 +2,8 @@
   (:refer-clojure :exclude [test])
   (:use [clojure.test]
         [leiningen.test]
-        [leiningen.util.file :only [tmp-dir]]
-        [leiningen.core :only [read-project]]
-        [leiningen.test.helper :only [sample-no-aot-project]]))
+        [leiningen.test.helper :only [tmp-dir sample-no-aot-project]])
+  (:require [clojure.java.io :as io]))
 
 (use-fixtures :each
               (fn [f]
@@ -12,9 +11,11 @@
                 (.delete (java.io.File. tmp-dir "lein-test-ran"))))
 
 (defn ran? [& expected]
-  (= (set expected)
-     (set (map read-string (.split (slurp (format "%s/lein-test-ran" tmp-dir))
-                                   "\n")))))
+  (let [ran-file (io/file tmp-dir "lein-test-ran")]
+    (and (.exists ran-file)
+         (= (set expected)
+            (set (for [ran (.split (slurp ran-file) "\n")]
+                   (read-string ran)))))))
 
 (deftest test-project-selectors
   (is (= [:default :integration :int2 :no-custom]

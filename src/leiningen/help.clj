@@ -1,11 +1,11 @@
 (ns leiningen.help
   "Display a list of tasks or help for a given task."
-  (:use [leiningen.util.ns :only [namespaces-matching]])
   (:require [clojure.string :as string]
-            [clojure.java.io :as io]))
+            [clojure.java.io :as io]
+            [bultitude.core :as b]))
 
-(def tasks (->> (namespaces-matching "leiningen")
-                (filter #(re-find #"^leiningen\.(?!core|util)[^\.]+$" (name %)))
+(def tasks (->> (b/namespaces-on-classpath :prefix "leiningen")
+                (filter #(re-find #"^leiningen\.(?!core|main)[^\.]+$" (name %)))
                 (distinct)
                 (sort)))
 
@@ -38,15 +38,13 @@
 
 (defn subtask-help-for
   [task-ns task]
-  (let [subtasks (get-subtasks-and-docstrings-for task)]
-    (if (empty? subtasks)
-      nil
-      (let [longest-key-length (apply max (map count (keys subtasks)))
-            help-fn (ns-resolve task-ns 'help)]
-        (string/join "\n"
-          (concat ["\n\nSubtasks available:"]
-                  (for [[subtask doc] subtasks]
-                    (formatted-help subtask doc longest-key-length))))))))
+  (if-let [subtasks (seq (get-subtasks-and-docstrings-for task))]
+    (let [longest-key-length (apply max (map count (keys subtasks)))]
+      (string/join "\n"
+                   (concat ["\n\nSubtasks available:"]
+                           (for [[subtask doc] subtasks]
+                             (formatted-help subtask doc
+                                             longest-key-length)))))))
 
 (defn- resolve-task [task-name]
   (let [task-ns (doto (symbol (str "leiningen." task-name)) require)
@@ -76,21 +74,21 @@
              ns-summary (:doc (meta (find-ns (doto task-ns require))))
              first-line (first (.split (help-for task-name) "\n"))]
          ;; Use first line of task docstring if ns metadata isn't present
-         (str task-name (apply str (repeat (- 12 (count task-name)) " "))
+         (str task-name (apply str (repeat (- 13 (count task-name)) " "))
               (or ns-summary first-line)))
        (catch Throwable e
          (binding [*out* *err*]
            (str task-ns "  Problem loading: " (.getMessage e))))))
 
-(defn help
+(defn ^:no-project-needed help
   "Display a list of tasks or help for a given task.
 
-Also provides readme, tutorial, news, sample, deploying and copying documentation."
-  ([task] (println (or (static-help task) (help-for task))))
-  ([]
+Also provides readme, tutorial, news, sample, deploying and copying info."
+  ([_ task] (println (or (static-help task) (help-for task))))
+  ([_ ]
      (println "Leiningen is a tool for working with Clojure projects.\n")
      (println "Several tasks are available:")
      (doseq [task-ns tasks]
        (println (help-summary-for task-ns)))
      (println "\nRun lein help $TASK for details.")
-     (println "See also: readme, tutorial, copying, sample, deploying and news.")))
+     (println "See also: readme, tutorial, news, sample, deploying and copying.")))

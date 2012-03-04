@@ -1,10 +1,10 @@
 (ns leiningen.test.run
+  (:require [leiningen.core.project :as project])
   (:use [clojure.test]
         [clojure.java.io :only [delete-file]]
-        [leiningen.core :only [read-project]]
+        ;; [leiningen.javac :only [javac]]
         [leiningen.run]
-        [leiningen.util.file :only [tmp-dir]]
-        [leiningen.test.helper :only [tricky-name-project]]))
+        [leiningen.test.helper :only [tmp-dir tricky-name-project]]))
 
 (def out-file (format "%s/lein-test" tmp-dir))
 
@@ -33,3 +33,8 @@
   (is (= "nom::bbb" (slurp out-file)))
   (is (zero? (run tricky-name-project "--" "-m")))
   (is (= "nom:-m" (slurp out-file))))
+
+;; TODO: re-enable
+;; (deftest test-run-java-main
+;;   (javac dev-deps-project)
+;;   (is (zero? (run dev-deps-project))))

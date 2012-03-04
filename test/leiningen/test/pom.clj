@@ -1,25 +1,30 @@
 (ns leiningen.test.pom
   (:use [clojure.test]
         [clojure.java.io :only [file delete-file]]
-        [leiningen.core :only [read-project defproject]]
-        [leiningen.util.maven :only [make-model]]
-        [leiningen.pom :only [pom]]
+        [leiningen.pom :only [make-pom pom]]
         [leiningen.test.helper :only [sample-project]]))
 
-(deftest test-pom
-  (let [pom-file (file (:root sample-project) "pom.xml")]
+(deftest test-pom-file-is-created
+  (let [pom-file (file (:target-path sample-project) "pom.xml")]
     (delete-file pom-file true)
     (pom sample-project)
     (is (.exists pom-file))))
 
-(deftest test-make-model-includes-build-settings
-  (let [model (make-model sample-project)]
-    (is (= "src" (-> model .getBuild .getSourceDirectory)))
-    (is (= "test" (-> model .getBuild .getTestSourceDirectory)))))
+(deftest test-pom-has-classifier-when-defined
+  (let [pom (make-pom sample-project)]
+    (is (not (re-find #"classifier" pom))))
+  (let [altered-meta (assoc-in (meta sample-project)
+                               [:without-profiles :classifier]
+                               "stuff")
+        pom (make-pom (with-meta sample-project altered-meta))]
+    (is (re-find #"<classifier>stuff</classifier>" pom))))
+
 
 (deftest test-snapshot-checking
   (let [aborted? (atom false)]
-    (binding [leiningen.core/abort #(reset! aborted? %&)]
-      (pom (assoc sample-project :version "1.0"
-                  :dependencies [['clojure "1.0.0-SNAPSHOT"]]))
+    (binding [leiningen.pom/abort #(reset! aborted? %&)]
+      (let [project (assoc sample-project :version "1.0"
+                           :dependencies [['clojure "1.0.0-SNAPSHOT"]])]
+        (pom (with-meta project
+             {:without-profiles project})))
       (is @aborted?))))

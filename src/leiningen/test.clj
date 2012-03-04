@@ -1,18 +1,17 @@
 (ns leiningen.test
   "Run the project's tests."
   (:refer-clojure :exclude [test])
-  (:use [clojure.java.io :only [file]]
-        [leiningen.core :only [*interactive?*]]
-        [leiningen.util.ns :only [namespaces-in-dir]]
-        [leiningen.compile :only [eval-in-project]])
+  (:require [clojure.java.io :as io]
+            [bultitude.core :as b]
+            [leiningen.core.eval :as eval]
+            [leiningen.core.project :as project])
   (:import (java.io File)))
 
-;; TODO: switch to using *interactive* flag in 2.0.
-(def *exit-after-tests* true)
+(def ^:dynamic *exit-after-tests* true)
 
 (defn- form-for-hook-selectors [selectors]
   `(when (seq ~selectors)
-     (leiningen.util.injected/add-hook
+     (leiningen.core.injected/add-hook
       (resolve 'clojure.test/test-var)
       (fn test-var-with-selector [test-var# var#]
         (when (reduce #(or %1 (%2 (assoc (meta var#) ::var var#)))
@@ -24,11 +23,12 @@
 each namespace and print an overall summary."
   ([namespaces result-file & [selectors]]
      `(do
-        (doseq [n# '~namespaces]
-          (require n# :reload))
+        (when (seq '~namespaces)
+          (apply require :reload '~namespaces))
         ~(form-for-hook-selectors selectors)
         (let [failures# (atom #{})
-              _# (leiningen.util.injected/add-hook
+              ;; TODO: fall back for :disable-injected? already pretty hairy =\
+              _# (leiningen.core.injected/add-hook
                   #'clojure.test/report
                   (fn report-with-failures [report# m# & args#]
                     (when (#{:error :fail} (:type m#))
@@ -44,13 +44,17 @@ each namespace and print an overall summary."
                              (java.io.FileOutputStream.)
                              (java.io.OutputStreamWriter.))]
             (.write w# (pr-str summary#)))
-          (when (or ~*exit-after-tests* (not ~*interactive?*))
-            (System/exit 0))))))
+          (when ~*exit-after-tests*
+            (System/exit (+ (:error summary#) (:fail summary#))))))))
 
 (defn- read-args [args project]
   (let [args (map read-string args)
         nses (if (or (empty? args) (every? keyword? args))
-               (sort (namespaces-in-dir (:test-path project)))
+               ;; maybe this is stupid and all *-path entries should
+               ;; be absolute?
+               (sort
+                 (b/namespaces-on-classpath
+                   :classpath (map io/file (:test-paths project))))
                (filter symbol? args))
         selectors (map (merge {:all '(constantly true)}
                               (:test-selectors project)) (filter keyword? args))
@@ -68,13 +72,12 @@ each namespace and print an overall summary."
 Accepts either a list of test namespaces to run or a list of test
 selectors. With no arguments, runs all tests."
   [project & tests]
-  (when (:eval-in-leiningen project)
-    (require '[clojure walk template stacktrace]))
-  (let [[nses selectors] (read-args tests project)
-        result (doto (File/createTempFile "lein" "result") .deleteOnExit)]
-    (eval-in-project project (form-for-testing-namespaces
-                              nses (.getAbsolutePath result) (vec selectors))
-                     nil nil '(require 'clojure.test))
+  (let [project (project/merge-profiles project [:test])
+        [nses selectors] (read-args tests project)
+        result (doto (File/createTempFile "lein" "result") .deleteOnExit)
+        form (form-for-testing-namespaces nses (.getAbsolutePath result)
+                                          (vec selectors))]
+    (eval/eval-in-project project form '(require 'clojure.test))
     (if (and (.exists result) (pos? (.length result)))
       (let [summary (read-string (slurp (.getAbsolutePath result)))
             success? (zero? (+ (:error summary) (:fail summary)))]

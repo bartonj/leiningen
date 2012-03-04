@@ -1,45 +1,55 @@
 (ns leiningen.javac
   "Compile Java source files."
   (:use [leiningen.classpath :only [get-classpath-string]]
-        [leiningen.util.paths :only [normalize-path]])
-  (:require [lancet.core :as lancet])
-  (:import (java.io File)))
+        [clojure.string :only [join]]
+        [clojure.java.io :only [file]])
+  (:import javax.tools.ToolProvider))
 
-(def ^{:doc "Default options for the java compiler." :dynamic true} *default-javac-options*
-  {:debug "false" :fork "true"
-   :includejavaruntime "yes"
-   :includeantruntime "false"
-   :source "1.5" :target "1.5"})
+;; There is probably a more efficient way to do this, but this is cool
+;; too.
+(defn extract-java-source
+  "Find all of the Java source files in a directory."
+  [dir]
+  (filter #(.endsWith % ".java")
+          (map #(.getPath %) (file-seq (file dir)))))
 
-(defn- extract-javac-task
-  "Extract a compile task from the given spec."
-  [project [path & options]]
-  (merge *default-javac-options*
-         (:javac-options project)
-         {:destdir (:compile-path project)
-          :srcdir (normalize-path (:root project) path)
-          :classpath (get-classpath-string project)}
-         (apply hash-map options)))
+;; Tool's .run method expects the last argument to be an array of
+;; strings, so that's what we'll return here.
+(defn javac-options 
+  "Compile all sources of possible options and add important defaults.
+  Result is a String java array of options."
+  [project files args]
+  (into-array 
+    String
+    (concat (:javac-options project)
+            args
+            ["-cp" (get-classpath-string project)
+             "-d" (:compile-path project)]
+            files)))
 
-(defn- extract-javac-tasks
-  "Extract all compile tasks of the project."
-  [project]
-  (let [specs (:java-source-path project)]
-    (for [spec (if (string? specs) [[specs]] specs)]
-      (extract-javac-task project spec))))
-
+;; We can't really control what is printed here. We're just going to
+;; allow `.run` to attach in, out, and err to the standard streams. This
+;; should have the effect of compile errors being printed. javac doesn't
+;; actually output any compilation info unless it has to (for an error)
+;; or you make it do so with `-verbose`.
 (defn- run-javac-task
-  "Compile the given task spec."
-  [task-spec]
-  (lancet/mkdir {:dir (:destdir task-spec)})
-  (lancet/javac task-spec))
+  "Run javac to compile all source files in the project."
+  [project args]
+  (let [files (mapcat extract-java-source (:java-source-paths project))
+        compile-path (:compile-path project)]
+    (when (pos? (count files))
+      (println "Compiling" (count files) "source files to" compile-path) 
+      (.mkdirs (file compile-path)) 
+      (.run (ToolProvider/getSystemJavaCompiler) 
+            nil nil nil
+            (javac-options project files args)))))
 
 (defn javac
   "Compile Java source files.
 
-Add a :java-source-path key to project.clj to specify where to find them."
-  [project & [directory]]
-  (doseq [task (extract-javac-tasks project)
-          :when (or (nil? directory) (= directory (:srcdir task)))]
-    (run-javac-task task)))
+Add a :java-source-paths key to project.clj to specify where to find them.
+Any options passed will be given to javac. One place where this can be useful
+is `lein javac -verbose`."
+  [project & args]
+  (run-javac-task project args))
 
