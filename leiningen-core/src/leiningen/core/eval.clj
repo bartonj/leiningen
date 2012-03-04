@@ -72,8 +72,14 @@
 (defn native-arch-path
   "Path to the os/arch-specific directory containing native libs."
   [project]
-  (when (and (get-os) (get-arch))
-    (io/file (:native-path project) (name (get-os)) (name (get-arch)))))
+  (let [native-path (io/file (:native-path project)) 
+        arch-path (when (and (get-os) (get-arch))
+                    (io/file (:native-path project)
+                             (name (get-os)) (name (get-arch))))]
+    (str (when (.exists arch-path)
+           (str arch-path (System/getProperty "path.separator")))
+         (when (.exists native-path)
+           native-path))))
 
 (defn- as-str [x]
   (if (instance? clojure.lang.Named x)
@@ -94,7 +100,7 @@
                          (str (:name project) ".version") (:version project)
                          :clojure.debug (boolean (or (System/getenv "DEBUG")
                                                      (:debug project)))})
-      ~@(when (and native-arch-path (.exists native-arch-path))
+      ~@(when-not (empty? native-arch-path)
           [(d-property [:java.library.path native-arch-path])]))))
 
 (defn- pump [reader out]
